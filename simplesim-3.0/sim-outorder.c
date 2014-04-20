@@ -128,6 +128,12 @@ static int comb_nelt = 1;
 static int comb_config[1] =
   { /* meta_table_size */1024 };
 
+/* Perceptron */
+static int percept_nelt = 3;
+static int percept_config[3] =
+	{ /* No of Perceptrons */ 128, /*No of BHR bits */ 8, /* hist */ 27};
+
+
 /* return address stack (RAS) size */
 static int ras_size = 8;
 
@@ -654,6 +660,14 @@ sim_reg_options(struct opt_odb_t *odb)
                  &pred_type, /* default */"bimod",
                  /* print */TRUE, /* format */NULL);
 
+/* Perceptron */
+  opt_reg_int_list(odb, "-bpred:perceptron",
+		   "perceptron predictor config (<table size> <weight bit width> <hist width>)",
+			percept_config, percept_nelt, &percept_nelt,
+			/* default */ percept_config,
+			/* print */ TRUE, /* format */ NULL, /* !accrue */ FALSE);
+
+
   opt_reg_int_list(odb, "-bpred:bimod",
 		   "bimodal predictor config (<table size>)",
 		   bimod_config, bimod_nelt, &bimod_nelt,
@@ -972,6 +986,18 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 			  /* btb assoc */btb_config[1],
 			  /* ret-addr stack size */ras_size);
     }
+  else if (!mystricmp(pred_type, "perceptron")) {
+		pred = bpred_create(BPredPercept,
+				0,
+				percept_config[0],
+				percept_config[1],
+				0,
+				percept_config[2],
+				0,
+				btb_config[0],
+				btb_config[1],
+				ras_size);
+	}
   else
     fatal("cannot parse predictor type `%s'", pred_type);
 

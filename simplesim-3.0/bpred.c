@@ -62,6 +62,24 @@
 /* turn this on to enable the SimpleScalar 2.0 RAS bug */
 /* #define RAS_BUG_COMPATIBLE */
 
+
+typedef struct {
+	char place_holder;
+	int prediction;
+	int out;
+
+	unsigned long long int spec_hist;
+	int *w_table_entry;
+
+	unsigned long long *access_entry;
+} perc_update_t;
+
+#define MAX_WEIGHT(weight_bits) 	((1<<((weight_bits)-1))-1)
+#define MIN_WEIGHT(weight_bits) 	(-((MAX_WEIGHT(weight_bits))+1))
+
+#define THETA(bhr_width) 			((int) (1.93 * (bhr_width) + 14))
+
+
 /* create a branch predictor */
 struct bpred_t *			/* branch predictory instance */
 bpred_create(enum bpred_class class,	/* type of predictor to create */
@@ -105,12 +123,17 @@ bpred_create(enum bpred_class class,	/* type of predictor to create */
     break;
 
 	
-  /* GSkew Added */
+  /* gSelect Added */
   case BPred2Select:
 	pred->dirpred.twolev =
 	  bpred_dir_create(class, l1size, l2size, shift_width, xor);
   break;
 
+  case BPredPercept:
+	pred->dirpred.bimod =
+	  bpred_dir_create(class, l1size, l2size, shift_width, 0);
+
+	break;
   case BPred2bit:
     pred->dirpred.bimod = 
       bpred_dir_create(class, bimod_size, 0, 0, 0);
@@ -129,6 +152,7 @@ bpred_create(enum bpred_class class,	/* type of predictor to create */
   case BPredComb:
   case BPred2Level:
   case BPred2Select:
+  case BPredPercept:
   case BPred2bit:
     {
       int i;
@@ -242,6 +266,31 @@ bpred_dir_create (
       break;
     }
 
+  /* Perceptron */
+  case BPredPercept:
+	if(!l1size)
+		fatal("Number of Perceptrons must be greater than 0!: `%d'", l1size);
+	if(!l2size)
+		fatal("Number of Weight Bits must be greater than 0!: `%d'", l2size);
+	if(!shift_width)
+		fatal("Shift Register Width must ge greater than 0!: `%d'", shift_width);
+
+	pred_dir->config.percept.num_perc = l1size;
+	pred_dir->config.percept.w_bits = l2size;
+	pred_dir->config.percept.bhr_width = shift_width;
+	pred_dir->config.percept.g_hist = 0;
+	pred_dir->config.percept.spec_hist = 0;
+
+	if( !(pred_dir->config.percept.w_table
+		= calloc(l1size, sizeof(int)*(shift_width+1))) )
+		fatal("Cannot allocate Perceptron Table!");
+
+	if( !(pred_dir->config.percept.access_table
+		= calloc(l1size, sizeof(unsigned long long))) )
+		fatal("Cannot allocate Access Table!");
+
+	break;
+
   case BPred2bit:
     if (!l1size || (l1size & (l1size-1)) != 0)
       fatal("2bit table size, `%d', must be non-zero and a power of two", 
@@ -293,6 +342,12 @@ bpred_dir_config(
       name, pred_dir->config.bimod.size);
     break;
 
+  case BPredPercept:
+	fprintf(stream, "pred_dir: %s: %d # of perceptrons, %d weight bits, %d history\n",
+		name, pred_dir->config.percept.num_perc, pred_dir->config.percept.w_bits,
+		pred_dir->config.percept.bhr_width);
+	break;
+
   case BPredTaken:
     fprintf(stream, "pred_dir: %s: predict taken\n", name);
     break;
@@ -329,19 +384,19 @@ bpred_config(struct bpred_t *pred,	/* branch predictor instance */
     fprintf(stream, "ret_stack: %d entries", pred->retstack.size);
     break;
 
-  case BPred2Select:
-    bpred_dir_config (pred->dirpred.twolev, "2lev", stream);
-    fprintf(stream, "btb: %d sets x %d associativity", 
-	    pred->btb.sets, pred->btb.assoc);
-    fprintf(stream, "ret_stack: %d entries", pred->retstack.size);
-	break; 
-
   case BPred2bit:
     bpred_dir_config (pred->dirpred.bimod, "bimod", stream);
     fprintf(stream, "btb: %d sets x %d associativity", 
 	    pred->btb.sets, pred->btb.assoc);
     fprintf(stream, "ret_stack: %d entries", pred->retstack.size);
     break;
+
+  case BPredPercept:
+	bpred_dir_config (pred->dirpred.bimod, "perceptron", stream);
+	fprintf(stream, "btb: %d sets x %d associativity",
+		pred->btb.sets, pred->btb.assoc);
+	fprintf(stream, "ret_stack: %d entries", pred->retstack.size);
+	break;
 
   case BPredTaken:
     bpred_dir_config (pred->dirpred.bimod, "taken", stream);
@@ -385,6 +440,8 @@ bpred_reg_stats(struct bpred_t *pred,	/* branch predictor instance */
 	case BPred2Select:
 	  name = "bpred_2select";
 	  break;
+	case BPredPercept:
+	  name = "bpred_percept";
     case BPred2bit:
       name = "bpred_bimod";
       break;
@@ -504,9 +561,12 @@ bpred_after_priming(struct bpred_t *bpred)
   bpred->ras_hits = 0;
 }
 
-#define BIMOD_HASH(PRED, ADDR)						\
-  ((((ADDR) >> 19) ^ ((ADDR) >> MD_BR_SHIFT)) & ((PRED)->config.bimod.size-1))
+#define BIMOD_HASH(PRED, ADDR)		\
+	((((ADDR) >> 19) ^ ((ADDR) >> MD_BR_SHIFT)) & ((PRED)->config.bimod.size-1))
     /* was: ((baddr >> 16) ^ baddr) & (pred->dirpred.bimod.size-1) */
+
+#define PERCEPT_HASH(PRED, ADDR) 	\
+	((((ADDR) >> 19) ^ ((ADDR) >> MD_BR_SHIFT)) & ((PRED)->config.percept.num_perc-1))
 
 /* predicts a branch direction */
 char *						/* pointer to counter */
@@ -554,6 +614,49 @@ bpred_dir_lookup(struct bpred_dir_t *pred_dir,	/* branch dir predictor inst */
     case BPred2bit:
       p = &pred_dir->config.bimod.table[BIMOD_HASH(pred_dir, baddr)];
       break;
+	case BPredPercept:
+	{
+		int i, index, out;
+		unsigned long long int mask;
+		int *w, *entry;
+		unsigned long long *access_entry;
+
+		perc_update_t *p_state;
+
+		index = PERCEPT_HASH(pred_dir, baddr);
+
+		entry= &pred_dir->config.percept.w_table[index*(pred_dir->config.percept.bhr_width+1)];
+		access_entry = &pred_dir->config.percept.access_table[index];
+
+		*access_entry += 1;
+
+		w = &entry[0];
+
+		out = *w;
+		w++;
+		for(mask=1, i=1; i <= pred_dir->config.percept.bhr_width; i++,mask<<=1,w++) {
+			if(pred_dir->config.percept.spec_hist & mask)
+				out += *w;
+			else
+				out += -*w;
+		}
+
+		if( !(p_state = calloc(1, sizeof(perc_update_t))) )
+			fatal("Cannot allocate Perceptron Update Struct!");
+
+		p_state->out = out;
+		p_state->w_table_entry = entry;
+		p_state->access_entry = access_entry;
+		p_state->spec_hist = pred_dir->config.percept.spec_hist;
+		p_state->prediction = out >= 0;
+		p_state->place_holder = p_state->prediction ? 3 : 0;
+
+		/* Update Speculative Global History Register */
+		pred_dir->config.percept.spec_hist <<=1;
+		pred_dir->config.percept.spec_hist |= p_state->prediction;
+		p = (char *) p_state;
+	}
+
     case BPredTaken:
     case BPredNotTaken:
       break;
@@ -630,6 +733,7 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
 	    bpred_dir_lookup (pred->dirpred.twolev, baddr);
 	}
       break;
+	case BPredPercept:
     case BPred2bit:
       if ((MD_OP_FLAGS(op) & (F_CTRL|F_UNCOND)) != (F_CTRL|F_UNCOND))
 	{
@@ -935,6 +1039,67 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
   /* update state (but not for jumps) */
   if (dir_update_ptr->pdir1)
     {
+		if(pred->class == BPredPercept) {
+			perc_update_t *u = (perc_update_t *) dir_update_ptr->pdir1;
+			int i, y, mask, *w;
+			unsigned long long int hist;
+			int needUpdate = 1;
+
+			/* Update Actual Global History Register */
+			pred->dirpred.bimod->config.percept.g_hist <<= 1;
+			pred->dirpred.bimod->config.percept.g_hist |= taken;
+
+			if(u->prediction != taken) {
+				pred->dirpred.bimod->config.percept.spec_hist =
+					pred->dirpred.bimod->config.percept.g_hist;
+			}
+
+			if(u->out > THETA(pred->dirpred.bimod->config.percept.bhr_width))
+				y = 1;
+			else if(u->out < -THETA(pred->dirpred.bimod->config.percept.bhr_width))
+				y = 0;
+			else
+				y = 2;
+
+			if(y == 1 && taken)
+				needUpdate--;
+			else if(y == 0 && !taken)
+				needUpdate--;
+		
+			if(needUpdate) {
+				w = &u->w_table_entry[0];
+				
+				if(taken)
+					(*w)++;
+				else
+					(*w)--;
+
+				if(*w > MAX_WEIGHT(pred->dirpred.bimod->config.percept.w_bits))
+					*w = MAX_WEIGHT(pred->dirpred.bimod->config.percept.w_bits);
+				if(*w < MIN_WEIGHT(pred->dirpred.bimod->config.percept.w_bits))
+					*w = MIN_WEIGHT(pred->dirpred.bimod->config.percept.w_bits);
+			
+				w++;
+				hist = u->spec_hist;
+
+				for(mask=1,i=0;i<pred->dirpred.bimod->config.percept.bhr_width; i++,mask<<=1,w++){
+					if(!!(hist & mask) == taken) {
+						(*w)++;
+						if(*w > MAX_WEIGHT(pred->dirpred.bimod->config.percept.w_bits))
+							*w = MAX_WEIGHT(pred->dirpred.bimod->config.percept.w_bits);
+					}
+					else {
+						(*w)--;
+						if(*w < MIN_WEIGHT(pred->dirpred.bimod->config.percept.w_bits))
+							*w = MIN_WEIGHT(pred->dirpred.bimod->config.percept.w_bits);	
+					}
+				}
+					
+			}	
+		}
+
+
+
       if (taken)
 	{
 	  if (*dir_update_ptr->pdir1 < 3)

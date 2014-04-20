@@ -103,6 +103,7 @@ enum bpred_class {
   BPred2Level,			/* 2-level correlating pred w/2-bit counters */
   BPred2bit,			/* 2-bit saturating cntr pred (dir mapped) */
   BPred2Select,
+  BPredPercept,
   BPredTaken,			/* static predict taken */
   BPredNotTaken,		/* static predict not taken */
   BPred_NUM
@@ -132,6 +133,15 @@ struct bpred_dir_t {
       int *shiftregs;		/* level-1 history table */
       unsigned char *l2table;	/* level-2 prediction state table */
     } two;
+	struct {
+	  int num_perc;
+	  int w_bits;
+	  int bhr_width;
+	  int *w_table;
+	  unsigned long long *access_table;
+	  unsigned long long g_hist;
+	  unsigned long long spec_hist;
+	} percept;
   } config;
 };
 
