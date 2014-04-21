@@ -1074,6 +1074,8 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 			class1 = BPred2Level;
 		} else if( !mystricmp(pred_type2, "perceptron")) {
 			class1 = BPredPercept;
+		} else if( !mystricmp(pred_type2, "select")) {
+			class1 = BPred2Select;
 		} else {
 			fatal("cannot parse predictor type `%s'", pred_type2);
 		}
@@ -1087,6 +1089,8 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 			class2 = BPred2Level;
 		} else if( !mystricmp(pred_type3, "perceptron")) {
 			class2 = BPredPercept;
+		} else if( !mystricmp(pred_type3, "select")) {
+			class2 = BPred2Select;
 		} else {
 			fatal("cannot parse predictor type `%s'", pred_type3);
 		}
