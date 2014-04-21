@@ -399,7 +399,7 @@ bpred_dir_create (
 	      l2size);
       pred_dir->config.two.l2size = l2size;
       
-      if (!shift_width || shift_width > 30)
+      if (!shift_width || shift_width < 0)
 	fatal("shift register width, `%d', must be non-zero and positive",
 	      shift_width);
       pred_dir->config.two.shift_width = shift_width;
