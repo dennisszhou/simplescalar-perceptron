@@ -774,6 +774,22 @@ bpred_dir_lookup(struct bpred_dir_t *pred_dir,	/* branch dir predictor inst */
         p = &pred_dir->config.two.l2table[l2index];
       }
       break;
+	case BPred2Select: {
+
+		int l1index, l2index;
+
+		l1index = (baddr >> MD_BR_SHIFT) & (pred_dir->config.two.l1size -1);
+		l2index = pred_dir->config.two.shiftregs[l1index];
+
+		/* Create Index (BADDR, GHR) */
+		l2index = (((baddr >> MD_BR_SHIFT)
+			& (1 << pred_dir->config.two.shift_width/2))
+			<< (pred_dir->config.two.shift_width/2))
+			| (l2index & (1 << pred_dir->config.two.shift_width/2 -1));
+		
+		p = &pred_dir->config.two.l2table[l2index];
+		}
+		break;
     case BPred2bit:
       p = &pred_dir->config.bimod.table[BIMOD_HASH(pred_dir, baddr)];
       break;
@@ -890,6 +906,7 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
 	    }
 	}
       break;
+	case BPred2Select:
     case BPred2Level:
       if ((MD_OP_FLAGS(op) & (F_CTRL|F_UNCOND)) != (F_CTRL|F_UNCOND))
 	{
