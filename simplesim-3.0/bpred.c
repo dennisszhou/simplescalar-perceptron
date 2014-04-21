@@ -1,5 +1,4 @@
-/* bpred.c - branch predictor routines */
-
+/* bpred.c - branch predictor routines */ 
 /* SimpleScalar(TM) Tool Suite
  * Copyright (C) 1994-2003 by Todd M. Austin, Ph.D. and SimpleScalar, LLC.
  * All Rights Reserved. 
@@ -208,6 +207,165 @@ bpred_create(enum bpred_class class,	/* type of predictor to create */
   return pred;
 }
 
+
+/* Tournament Predictor */
+struct bpred_t *			/* branch predictory instance */
+bpred_create2(enum bpred_class class,	/* type of predictor to create */
+		 enum bpred_class class1,
+	     unsigned int bimod_size1,	/* bimod table size */
+	     unsigned int l1size1,	/* 2lev l1 table size */
+	     unsigned int l2size1,	/* 2lev l2 table size */
+	     unsigned int shift_width1,	/* history register width */
+	     unsigned int xor1,  	/* history xor address flag */
+		 enum bpred_class class2,
+	     unsigned int bimod_size2,	/* bimod table size */
+	     unsigned int l1size2,	/* 2lev l1 table size */
+	     unsigned int l2size2,	/* 2lev l2 table size */
+	     unsigned int shift_width2,	/* history register width */
+	     unsigned int xor2,  	/* history xor address flag */
+	     unsigned int meta_size,	/* meta table size */
+	     unsigned int btb_sets,	/* number of sets in BTB */ 
+	     unsigned int btb_assoc,	/* BTB associativity */
+	     unsigned int retstack_size) /* num entries in ret-addr stack */
+{
+	struct bpred_t *pred;
+
+	if (!(pred = calloc(1, sizeof(struct bpred_t))))
+    	fatal("out of virtual memory");
+
+  	pred->class = class;
+
+	/* metapredictor component */
+    pred->dirpred.meta = 
+      bpred_dir_create(BPred2bit, meta_size, 0, 0, 0);
+
+	/* fatal("TOURNAMENT: META - `%d'", meta_size); */
+
+	switch (class1) {
+  	case BPred2Level:
+    	pred->dirpred.bimod = 
+      	bpred_dir_create(class1, l1size1, l2size1, shift_width1, xor1);
+    	break;
+
+	
+  	/* gSelect Added */
+  	case BPred2Select:
+		pred->dirpred.bimod =
+		bpred_dir_create(class1, l1size1, l2size1, shift_width1, xor1);
+ 	 	break;
+
+  	case BPredPercept:
+		pred->dirpred.bimod =
+	  	bpred_dir_create(class1, l1size1, l2size1, shift_width1, 0);
+
+		break;
+ 	case BPred2bit:
+    	pred->dirpred.bimod = 
+      	bpred_dir_create(class1, bimod_size1, 0, 0, 0);
+
+  	case BPredTaken:
+  	case BPredNotTaken:
+    	/* no other state */
+    	break;
+
+  	default:
+    	panic("bogus predictor class");
+  }
+
+  switch (class2) {
+  	case BPred2Level:
+    	pred->dirpred.twolev = 
+      	bpred_dir_create(class2, l1size2, l1size2, shift_width2, xor2);
+    	break;
+
+	
+  	/* gSelect Added */
+  	case BPred2Select:
+		pred->dirpred.twolev =
+		bpred_dir_create(class2, l1size2, l2size2, shift_width2, xor2);
+ 	 	break;
+
+  	case BPredPercept:
+		pred->dirpred.twolev =
+	  	bpred_dir_create(class2, l1size2, l2size2, shift_width2, 0);
+
+		break;
+ 	case BPred2bit:
+    	pred->dirpred.twolev = 
+      	bpred_dir_create(class2, bimod_size2, 0, 0, 0);
+
+  	case BPredTaken:
+  	case BPredNotTaken:
+    	/* no other state */
+    	break;
+
+  	default:
+    	panic("bogus predictor class");
+  }
+
+  /* allocate ret-addr stack */
+  switch (class) {
+	case BPredTourn:
+  	case BPredComb:
+  	case BPred2Level:
+  	case BPred2Select:
+  	case BPredPercept:
+  	case BPred2bit:
+    {
+      int i;
+
+      /* allocate BTB */
+      if (!btb_sets || (btb_sets & (btb_sets-1)) != 0)
+		fatal("number of BTB sets must be non-zero and a power of two");
+      if (!btb_assoc || (btb_assoc & (btb_assoc-1)) != 0)
+		fatal("BTB associativity must be non-zero and a power of two");
+
+      if (!(pred->btb.btb_data = calloc(btb_sets * btb_assoc,
+					sizeof(struct bpred_btb_ent_t))))
+	fatal("cannot allocate BTB");
+
+      pred->btb.sets = btb_sets;
+      pred->btb.assoc = btb_assoc;
+
+      if (pred->btb.assoc > 1)
+	for (i=0; i < (pred->btb.assoc*pred->btb.sets); i++)
+	  {
+	    if (i % pred->btb.assoc != pred->btb.assoc - 1)
+	      pred->btb.btb_data[i].next = &pred->btb.btb_data[i+1];
+	    else
+	      pred->btb.btb_data[i].next = NULL;
+	    
+	    if (i % pred->btb.assoc != pred->btb.assoc - 1)
+	      pred->btb.btb_data[i+1].prev = &pred->btb.btb_data[i];
+	  }
+
+      /* allocate retstack */
+      if ((retstack_size & (retstack_size-1)) != 0)
+	fatal("Return-address-stack size must be zero or a power of two");
+      
+      pred->retstack.size = retstack_size;
+      if (retstack_size)
+	if (!(pred->retstack.stack = calloc(retstack_size, 
+					    sizeof(struct bpred_btb_ent_t))))
+	  fatal("cannot allocate return-address-stack");
+      pred->retstack.tos = retstack_size - 1;
+      
+      break;
+    }
+
+  case BPredTaken:
+  case BPredNotTaken:
+    /* no other state */
+    break;
+
+  default:
+    panic("bogus predictor class");
+  }
+
+  return pred;
+}
+
+
 /* create a branch direction predictor */
 struct bpred_dir_t *		/* branch direction predictor instance */
 bpred_dir_create (
@@ -329,6 +487,7 @@ bpred_dir_config(
   FILE *stream)			/* output stream */
 {
   switch (pred_dir->class) {
+  case BPredTourn:
   case BPred2Level:
   case BPred2Select:
     fprintf(stream,
@@ -367,6 +526,7 @@ bpred_config(struct bpred_t *pred,	/* branch predictor instance */
 	     FILE *stream)		/* output stream */
 {
   switch (pred->class) {
+  case BPredTourn:
   case BPredComb:
     bpred_dir_config (pred->dirpred.bimod, "bimod", stream);
     bpred_dir_config (pred->dirpred.twolev, "2lev", stream);
@@ -431,6 +591,9 @@ bpred_reg_stats(struct bpred_t *pred,	/* branch predictor instance */
   /* get a name for this predictor */
   switch (pred->class)
     {
+	case BPredTourn:
+	  name = "bpred_tourn";
+	  break;
     case BPredComb:
       name = "bpred_comb";
       break;
@@ -703,6 +866,7 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
   dir_update_ptr->pmeta = NULL;
   /* Except for jumps, get a pointer to direction-prediction bits */
   switch (pred->class) {
+	case BPredTourn:
     case BPredComb:
       if ((MD_OP_FLAGS(op) & (F_CTRL|F_UNCOND)) != (F_CTRL|F_UNCOND))
 	{

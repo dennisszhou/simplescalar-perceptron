@@ -104,6 +104,7 @@ enum bpred_class {
   BPred2bit,			/* 2-bit saturating cntr pred (dir mapped) */
   BPred2Select,
   BPredPercept,
+  BPredTourn,
   BPredTaken,			/* static predict taken */
   BPredNotTaken,		/* static predict not taken */
   BPred_NUM
@@ -209,6 +210,27 @@ bpred_create(enum bpred_class class,	/* type of predictor to create */
 	     unsigned int btb_sets,	/* number of sets in BTB */ 
 	     unsigned int btb_assoc,	/* BTB associativity */
 	     unsigned int retstack_size);/* num entries in ret-addr stack */
+
+/* Create Tournament Predictor */
+struct bpred_t *			/* branch predictory instance */
+bpred_create2(enum bpred_class class,	/* type of predictor to create */
+		 enum bpred_class class1,
+	     unsigned int bimod_size1,	/* bimod table size */
+	     unsigned int l1size1,	/* level-1 table size */
+	     unsigned int l2size1,	/* level-2 table size */
+	     unsigned int shift_width1,	/* history register width */
+	     unsigned int xor1,		/* history xor address flag */
+		 enum bpred_class class2,	
+	     unsigned int bimod_size2,	/* bimod table size */
+	     unsigned int l1size2,	/* level-1 table size */
+	     unsigned int l2size2,	/* level-2 table size */
+	     unsigned int shift_width2,	/* history register width */
+	     unsigned int xor2,		/* history xor address flag */
+	     unsigned int meta_size,	/* meta predictor table size */
+	     unsigned int btb_sets,	/* number of sets in BTB */ 
+	     unsigned int btb_assoc,	/* BTB associativity */
+	     unsigned int retstack_size);/* num entries in ret-addr stack */
+
 
 /* create a branch direction predictor */
 struct bpred_dir_t *		/* branch direction predictor instance */

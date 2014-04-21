@@ -112,6 +112,8 @@ static int fetch_speed;
 
 /* branch predictor type {nottaken|taken|perfect|bimod|2lev} */
 static char *pred_type;
+static char *pred_type2;
+static char *pred_type3;
 
 /* bimodal predictor config (<table_size>) */
 static int bimod_nelt = 1;
@@ -133,6 +135,18 @@ static int percept_nelt = 3;
 static int percept_config[3] =
 	{ /* No of Perceptrons */ 128, /*No of BHR bits */ 8, /* hist */ 27};
 
+/* Tournament */
+static int bimod2_nelt = 1;
+static int bimod2_config[1] =
+	{ /* bimod tlb size */2048 };
+
+static int t1_nelt = 4;
+static int t1_config[4] =
+	{ /* l1size */1, /* l2size */1024, /* hist */8, /* xor */FALSE};
+
+static int t2_nelt = 4;
+static int t2_config[4] =
+	{ /* l1size */1, /* l2size */1024, /* hist */8, /* xor */FALSE};
 
 /* return address stack (RAS) size */
 static int ras_size = 8;
@@ -660,6 +674,18 @@ sim_reg_options(struct opt_odb_t *odb)
                  &pred_type, /* default */"bimod",
                  /* print */TRUE, /* format */NULL);
 
+/* Tournament Predictor 1 and 2 */
+  opt_reg_string(odb, "-bpred2",
+		 "branch predictor type 2 {none|nottaken|taken|perfect|bimod|2lev|comb|perceptron}",
+				 &pred_type2, /* default */"none",
+				 /* print */TRUE, /* format */NULL);
+
+  opt_reg_string(odb, "-bpred3",
+		 "branch predictor type 2 {none|nottaken|taken|perfect|bimod|2lev|comb|perceptron}",
+				 &pred_type3, /* default */"none",
+				 /* print */TRUE, /* format */NULL);
+
+
 /* Perceptron */
   opt_reg_int_list(odb, "-bpred:perceptron",
 		   "perceptron predictor config (<table size> <weight bit width> <hist width>)",
@@ -667,12 +693,30 @@ sim_reg_options(struct opt_odb_t *odb)
 			/* default */ percept_config,
 			/* print */ TRUE, /* format */ NULL, /* !accrue */ FALSE);
 
+  opt_reg_int_list(odb, "-bpred:t1",
+		   "Tournament Predictor 1 config (<l1size> <l2size> <hist_size> <xor>)",
+			t1_config, t1_nelt, &t1_nelt,
+			/* default */ t1_config,
+			/* print */TRUE, /* format */NULL, /* !accrue */FALSE);
+
+  opt_reg_int_list(odb, "-bpred:t2",
+		   "Tournament Predictor 2 config (<l1size> <l2size> <hist_size> <xor>)",
+			t2_config, t2_nelt, &t2_nelt,
+			/* default */ t2_config,
+			/* print */TRUE, /* format */NULL, /* !accrue */FALSE);
 
   opt_reg_int_list(odb, "-bpred:bimod",
 		   "bimodal predictor config (<table size>)",
 		   bimod_config, bimod_nelt, &bimod_nelt,
 		   /* default */bimod_config,
 		   /* print */TRUE, /* format */NULL, /* !accrue */FALSE);
+
+  opt_reg_int_list(odb, "-bpred:bimod2",
+		   "bimodal predictor config (<table size>)",
+		   bimod2_config, bimod2_nelt, &bimod2_nelt,
+		   /* default */bimod2_config,
+		   /* print */TRUE, /* format */NULL, /* !accrue */FALSE);
+
 
   opt_reg_int_list(odb, "-bpred:2lev",
                    "2-level predictor config "
@@ -997,6 +1041,54 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 				btb_config[0],
 				btb_config[1],
 				ras_size);
+	}
+
+  else if( !mystricmp(pred_type, "tournament") ) {
+		enum bpred_class class1, class2;
+		if( !mystricmp(pred_type2, "taken")) {
+			class1 = BPredTaken;
+		} else if( !mystricmp(pred_type2, "nottaken")) {
+			class1 = BPredNotTaken;
+		} else if( !mystricmp(pred_type2, "bimod")) {
+			class1 = BPred2bit;
+		} else if( !mystricmp(pred_type2, "2lev")) {
+			class1 = BPred2Level;
+		} else if( !mystricmp(pred_type2, "perceptron")) {
+			class1 = BPredPercept;
+		} else {
+			fatal("cannot parse predictor type `%s'", pred_type2);
+		}
+		if( !mystricmp(pred_type3, "taken")) {
+			class2 = BPredTaken;
+		} else if( !mystricmp(pred_type3, "nottaken")) {
+			class2 = BPredNotTaken;
+		} else if( !mystricmp(pred_type3, "bimod")) {
+			class2 = BPred2bit;
+		} else if( !mystricmp(pred_type3, "2lev")) {
+			class2 = BPred2Level;
+		} else if( !mystricmp(pred_type3, "perceptron")) {
+			class2 = BPredPercept;
+		} else {
+			fatal("cannot parse predictor type `%s'", pred_type3);
+		}
+
+		pred = bpred_create2(BPredTourn,
+				class1,
+			  /* bimod table size */bimod_config[0],
+			  /* l1 size */t1_config[0],
+			  /* l2 size */t1_config[1],
+			  /* history reg size */t1_config[2],
+			  /* history xor address */t1_config[3],
+				class2,
+			  /* bimod table size */bimod2_config[0],
+			  /* l1 size */t2_config[0],
+			  /* l2 size */t2_config[1],
+			  /* history reg size */t2_config[2],
+			  /* history xor address */t2_config[3],
+			  /* meta table size */comb_config[0],
+			  /* btb sets */btb_config[0],
+			  /* btb assoc */btb_config[1],
+			  /* ret-addr stack size */ras_size);
 	}
   else
     fatal("cannot parse predictor type `%s'", pred_type);
