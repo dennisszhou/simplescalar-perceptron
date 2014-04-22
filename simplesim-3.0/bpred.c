@@ -148,6 +148,7 @@ bpred_create(enum bpred_class class,	/* type of predictor to create */
 
   /* allocate ret-addr stack */
   switch (class) {
+  case BPredTourn:
   case BPredComb:
   case BPred2Level:
   case BPred2Select:
@@ -275,7 +276,7 @@ bpred_create2(enum bpred_class class,	/* type of predictor to create */
   switch (class2) {
   	case BPred2Level:
     	pred->dirpred.twolev = 
-      	bpred_dir_create(class2, l1size2, l1size2, shift_width2, xor2);
+      	bpred_dir_create(class2, l1size2, l2size2, shift_width2, xor2);
     	break;
 
 	
@@ -495,6 +496,7 @@ bpred_dir_config(
       name, pred_dir->config.two.l1size, pred_dir->config.two.shift_width,
       pred_dir->config.two.xor ? "" : "no", pred_dir->config.two.l2size);
     break;
+
 
   case BPred2bit:
     fprintf(stream, "pred_dir: %s: 2-bit: %d entries, direct-mapped\n",
@@ -776,6 +778,8 @@ bpred_dir_lookup(struct bpred_dir_t *pred_dir,	/* branch dir predictor inst */
       break;
 	case BPred2Select: {
 
+		/* fatal("WE MADE IT SUCCESS! %d", pred_dir->config.two.l2size); */
+
 		int l1index, l2index;
 
 		l1index = (baddr >> MD_BR_SHIFT) & (pred_dir->config.two.l1size -1);
@@ -801,6 +805,8 @@ bpred_dir_lookup(struct bpred_dir_t *pred_dir,	/* branch dir predictor inst */
 		unsigned long long *access_entry;
 
 		perc_update_t *p_state;
+
+		/* fatal("HERE WE ARE ONCE AGAIN: %d", pred_dir->config.percept.num_perc); */
 
 		index = PERCEPT_HASH(pred_dir, baddr);
 
