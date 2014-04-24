@@ -1,0 +1,54 @@
+bimod = 4096
+gshare = 1 2048 32 1
+
+gcc test
+
+./sim-outorder -config config/gshare.cfg tests/benchmarks/cc1.alpha -O tests/benchmarks/1stmt.i
+
+bimod
+rate = .9001
+IPC = 1.2429
+
+gshare
+rate = .6652
+IPC = .9710
+
+
+anagram
+
+./sim-outorder -config config/gshare.cfg tests/benchmarks/anagram.alpha tests/benchmarks/words < tests/benchmarks/anagram.in
+
+bimod 
+rate = .9610
+IPC = 2.1839
+
+gshare
+rate = .6469
+IPC = 1.4219
+
+
+compress
+
+./sim-outorder -config config/bimod.cfg tests/benchmarks/compress95.alpha < tests/benchmarks/compress95.in
+
+bimod 
+rate = .9727
+IPC = 1.8096
+
+
+gshare
+rate = .9633
+IPC = 1.8064
+
+
+go
+
+./sim-outorder -config config/gshare.cfg tests/benchmarks/go.alpha 50 9 tests/benchmarks/2stone9.in
+
+bimod
+rate = .7976
+IPC = 1.3297
+
+gshare
+rate = .6243
+IPC = 1.1200
