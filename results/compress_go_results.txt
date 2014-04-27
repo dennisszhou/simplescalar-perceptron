@@ -31,6 +31,8 @@ rate = .9715
 IPC = 1.8097
 
 
+./sim-outorder -config config2/bimod_gshare.cfg tests/benchmarks/compress95.alpha < tests/benchmarks/compress95.in
+
 go
 bimod
 rate = .7976
@@ -63,3 +65,23 @@ IPC = 1.3331
 gshare_gselect
 rate = .8002
 IPC = 1.3317
+
+
+
+anagram
+ 
+bimod
+rate = .9610
+IPC = 2.1839
+
+gshare
+rate = .9754
+IPC = 2.2558
+
+gselect
+rate = .7165
+IPC = 1.4864
+
+perceptron
+rate = .9800
+IPC = 2.2787
