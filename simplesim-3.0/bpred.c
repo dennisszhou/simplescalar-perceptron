@@ -781,16 +781,20 @@ bpred_dir_lookup(struct bpred_dir_t *pred_dir,	/* branch dir predictor inst */
 		/* fatal("WE MADE IT SUCCESS! %d", pred_dir->config.two.l2size); */
 
 		int l1index, l2index;
+		int shift1, shift2;
+
+		shift1 = pred_dir->config.two.shift_width/2;
+		shift2 = pred_dir->config.two.shift_width - shift1;
 
 		l1index = (baddr >> MD_BR_SHIFT) & (pred_dir->config.two.l1size -1);
 		l2index = pred_dir->config.two.shiftregs[l1index];
 
 		/* Create Index (BADDR, GHR) */
 		l2index = (((baddr >> MD_BR_SHIFT)
-			& (1 << pred_dir->config.two.shift_width/2))
-			<< (pred_dir->config.two.shift_width/2))
-			| (l2index & (1 << pred_dir->config.two.shift_width/2 -1));
-		
+			& ((1 << shift1)-1))
+			<< (shift2))
+			| (l2index & ((1 << shift2) -1));
+
 		p = &pred_dir->config.two.l2table[l2index];
 		}
 		break;
