@@ -1,0 +1,65 @@
+Compress
+Bimod
+dir = .9522
+IPC - 1.8096
+
+gselect
+dir = .9665
+IPC = 1.8022
+
+gshare
+dir = .9670
+IPC = 1.7960
+
+perceptron
+rate = .9760
+IPC = 1.8039
+
+perfect 
+IPC = 1.8567
+
+bimod_gselect
+rate = .9715
+IPC = 1.8097
+
+bimod_ghsare
+rate = .9727
+IPC = 1.8096
+
+gshare_gselect
+rate = .9715
+IPC = 1.8097
+
+
+go
+bimod
+rate = .7976
+IPC = 1.3297
+
+gselect
+rate = .6219
+IPC = 1.1154
+
+gshare
+rate = .7340
+IPC = 1.2591
+
+perceptron
+dir = .8292
+IPC = 1.3934
+
+
+perfect
+IPC = 1.7616
+
+bimod_gselect
+rate: .7972
+IPC = 1.3284
+
+bimod_gshare
+rate = .8009
+IPC = 1.3331
+
+gshare_gselect
+rate = .8002
+IPC = 1.3317
